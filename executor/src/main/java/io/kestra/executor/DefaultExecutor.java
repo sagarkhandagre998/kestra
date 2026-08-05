@@ -581,7 +581,9 @@ public class DefaultExecutor extends AbstractService implements Executor {
                         }
                         // Handle WaitFor
                         else if (executionDelay.getDelayType().equals(ExecutionDelay.DelayType.CONTINUE_FLOWABLE)) {
-                            Execution newExecution = executionService.retryWaitFor(executor.getExecution(), executionDelay.getTaskRunId());
+                            Execution currentExecution = executor.getExecution();
+                            FlowWithSource flow = flowMetaStore.findByExecutionThenInjectDefaults(currentExecution).orElseThrow(() -> new FlowNotFoundException(currentExecution));
+                            Execution newExecution = executionService.retryWaitFor(currentExecution, executionDelay.getTaskRunId(), flow);
                             executor = executor.withExecution(newExecution, "continueLoop");
                         }
                     } catch (Exception e) {

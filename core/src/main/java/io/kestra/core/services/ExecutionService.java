@@ -44,6 +44,7 @@ import io.kestra.core.utils.Await;
 import io.kestra.core.utils.GraphUtils;
 import io.kestra.core.utils.IdUtils;
 import io.kestra.core.utils.ListUtils;
+import io.kestra.plugin.core.flow.Dag;
 import io.kestra.plugin.core.flow.Loop;
 import io.kestra.plugin.core.flow.LoopUntil;
 import io.kestra.plugin.core.flow.Pause;
@@ -177,7 +178,7 @@ public class ExecutionService {
         return execution.withTaskRun(taskRun).withState(State.Type.RUNNING);
     }
 
-    public Execution retryWaitFor(Execution execution, String flowableTaskRunId) {
+    public Execution retryWaitFor(Execution execution, String flowableTaskRunId, Flow flow) {
         if (execution.getTaskRunList() == null) {
             return execution.withState(State.Type.RUNNING);
         }
@@ -188,6 +189,7 @@ public class ExecutionService {
 
         // Remove all descendants (not just direct children) of the iterating LoopUntil so that nested
         // LoopUntil tasks start the next iteration with a clean state and don't inherit stale outputs.
+        // Keep descendants of DAG taskruns so each iteration's subtask taskruns are counted in execution statistics.
         List<TaskRun> newTaskRuns = execution
             .getTaskRunList()
             .stream()
@@ -197,6 +199,9 @@ public class ExecutionService {
                     return taskRun.resetAttempts().incrementIteration();
                 }
                 if (isDescendantOf(taskRun, flowableTaskRunId, byId)) {
+                    if (isDescendantOfDag(taskRun, byId, flow)) {
+                        return taskRun;
+                    }
                     return null;
                 }
                 return taskRun;
@@ -205,6 +210,23 @@ public class ExecutionService {
             .toList();
 
         return execution.withTaskRunList(newTaskRuns).withState(State.Type.RUNNING);
+    }
+
+    private boolean isDescendantOfDag(TaskRun taskRun, Map<String, TaskRun> byId, Flow flow) {
+        String parentId = taskRun.getParentTaskRunId();
+        while (parentId != null) {
+            TaskRun parent = byId.get(parentId);
+            if (parent != null) {
+                Task task = flow.findTaskByTaskIdOrNull(parent.getTaskId());
+                if (task instanceof Dag) {
+                    return true;
+                }
+                parentId = parent.getParentTaskRunId();
+            } else {
+                parentId = null;
+            }
+        }
+        return false;
     }
 
     private boolean isDescendantOf(TaskRun taskRun, String ancestorId, Map<String, TaskRun> byId) {

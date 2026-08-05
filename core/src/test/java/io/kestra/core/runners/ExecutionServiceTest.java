@@ -21,6 +21,7 @@ import io.kestra.core.models.Label;
 import io.kestra.core.models.executions.Execution;
 import io.kestra.core.models.executions.ExecutionId;
 import io.kestra.core.models.executions.TaskRun;
+import io.kestra.core.models.executions.TaskRunAttempt;
 import io.kestra.core.models.flows.Flow;
 import io.kestra.core.models.flows.FlowWithSource;
 import io.kestra.core.models.flows.GenericFlow;
@@ -733,5 +734,77 @@ class ExecutionServiceTest {
         assertThat(restarted.getId()).isEqualTo(newExecution.getId());
         assertThat(restarted.getOriginalId()).isEqualTo(newExecution.getId());
         assertThat(restarted.getTaskRunList()).isEmpty();
+    }
+
+    @Test
+    @LoadFlows("flows/valids/dag.yaml")
+    void retryWaitForShouldKeepDagSubtaskTaskruns() throws Exception {
+        // Given: a DAG flow and an execution simulating a LoopUntil iteration with a DAG child
+        Flow flow = flowRepository.findById(MAIN_TENANT, "io.kestra.tests", "dag").orElseThrow();
+
+        String loopUntilTaskRunId = "loopuntil-tr";
+        String dagTaskRunId = "dag-tr";
+        String dagSubtask1Id = "dag-subtask-1";
+        String dagSubtask2Id = "dag-subtask-2";
+
+        TaskRun loopUntilTaskRun = TaskRun.builder()
+            .tenantId(MAIN_TENANT)
+            .id(loopUntilTaskRunId)
+            .executionId("test-exec")
+            .namespace(flow.getNamespace())
+            .flowId(flow.getId())
+            .taskId("loopuntil")
+            .state(new State(State.Type.CREATED).withState(State.Type.RUNNING))
+            .attempts(List.of(TaskRunAttempt.builder().state(new State(State.Type.SUCCESS)).build()))
+            .build();
+
+        TaskRun dagTaskRun = TaskRun.builder()
+            .tenantId(MAIN_TENANT)
+            .id(dagTaskRunId)
+            .executionId("test-exec")
+            .namespace(flow.getNamespace())
+            .flowId(flow.getId())
+            .taskId("dag")
+            .parentTaskRunId(loopUntilTaskRunId)
+            .state(new State(State.Type.SUCCESS))
+            .build();
+
+        TaskRun dagSubtask1 = TaskRun.builder()
+            .tenantId(MAIN_TENANT)
+            .id(dagSubtask1Id)
+            .executionId("test-exec")
+            .namespace(flow.getNamespace())
+            .flowId(flow.getId())
+            .taskId("task1")
+            .parentTaskRunId(dagTaskRunId)
+            .state(new State(State.Type.SUCCESS))
+            .build();
+
+        TaskRun dagSubtask2 = TaskRun.builder()
+            .tenantId(MAIN_TENANT)
+            .id(dagSubtask2Id)
+            .executionId("test-exec")
+            .namespace(flow.getNamespace())
+            .flowId(flow.getId())
+            .taskId("task2")
+            .parentTaskRunId(dagTaskRunId)
+            .state(new State(State.Type.SUCCESS))
+            .build();
+
+        Execution execution = Execution.newExecution(flow, List.of())
+            .withTaskRunList(List.of(loopUntilTaskRun, dagTaskRun, dagSubtask1, dagSubtask2))
+            .withState(State.Type.RUNNING);
+
+        // When
+        Execution result = executionService.retryWaitFor(execution, loopUntilTaskRunId, flow);
+
+        // Then: DAG subtask taskruns are kept for accurate statistics, DAG taskrun is removed
+        assertThat(result.getTaskRunList()).hasSize(3);
+        assertThat(result.getTaskRunList().stream().map(TaskRun::getId))
+            .containsExactlyInAnyOrder(loopUntilTaskRunId, dagSubtask1Id, dagSubtask2Id);
+
+        // Verify execution statistics count all DAG subtask taskruns
+        long taskRunCount = result.getTaskRunList().size();
+        assertThat(taskRunCount).isEqualTo(3);
     }
 }
