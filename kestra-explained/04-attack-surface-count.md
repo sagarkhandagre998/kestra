@@ -24,18 +24,18 @@ Why 11 and not 30: surfaces 1–2 are the only ones reachable without credential
 
 ```mermaid
 flowchart TB
-  Internet --> S2[2. Webhook<br/>AnonymousAccess]
-  Internet --> S1[1. API + UI<br/>BasicAuth / SSO-EE]
-  S1 --> S3[3. Flow YAML<br/>= code exec]
+  Internet --> S2["2 - Webhook - AnonymousAccess"]
+  Internet --> S1["1 - API plus UI - BasicAuth"]
+  S1 --> S3["3 - Flow YAML - code exec"]
   S2 --> S3
-  S3 --> S4[4. Pebble SSTI]
-  S3 --> S5[5. Plugins]
-  S3 --> S6[6. Scripts / Docker / K8s]
-  S3 --> S7[7. Secrets-KV-Files-Storage]
-  S8[8. Scheduler triggers<br/>SSRF] --> S3
-  S3 --> S9[9. DB + Queue]
-  S3 --> S10[10. Worker gRPC]
-  S1 --> S11[11. AI-MCP-Blueprint-CLI]
+  S3 --> S4["4 - Pebble SSTI"]
+  S3 --> S5["5 - Plugins"]
+  S3 --> S6["6 - Scripts - Docker - K8s"]
+  S3 --> S7["7 - Secrets - KV - Files - Storage"]
+  S8["8 - Scheduler triggers - SSRF"] --> S3
+  S3 --> S9["9 - DB plus Queue"]
+  S3 --> S10["10 - Worker gRPC"]
+  S1 --> S11["11 - AI - MCP - Blueprint - CLI"]
   S11 --> S3
 ```
 

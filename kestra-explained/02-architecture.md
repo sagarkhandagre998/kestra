@@ -38,17 +38,17 @@ Kestra separates **deciding** (Executor) from **doing** (Worker) so it can scale
 
 ```mermaid
 flowchart LR
-  User[UI / CLI / Terraform / Git Sync] --> WS[webserver<br/>Micronaut REST /api/v1/{tenant}/...]
-  WS --> DB[(JDBC DB<br/>Postgres / MySQL / H2)]
-  WS --> EQ[ExecutionCommand Queue<br/>queue + queue-jdbc]
-  SCH[scheduler<br/>cron + polling] --> EQ
-  EQ --> EX[executor<br/>DefaultExecutor state machine]
-  EX --> WQ[Worker Queue<br/>gRPC / JDBC]
-  WQ --> W[worker<br/>plugin + script + Docker/K8s]
-  W --> ST[(Storage<br/>local / S3 / GCS + KV + Secrets)]
+  User["UI - CLI - Terraform - Git Sync"] --> WS["webserver - Micronaut REST API"]
+  WS --> DB["JDBC DB - Postgres - MySQL - H2"]
+  WS --> EQ["ExecutionCommand Queue"]
+  SCH["scheduler - cron plus polling"] --> EQ
+  EQ --> EX["executor - DefaultExecutor state machine"]
+  EX --> WQ["Worker Queue - gRPC - JDBC"]
+  WQ --> W["worker - plugin - script - Docker - K8s"]
+  W --> ST["Storage - local - S3 - GCS plus KV plus Secrets"]
   W --> EX
   EX --> DB
-  EX --> IDX[indexer<br/>search + stats]
+  EX --> IDX["indexer - search plus stats"]
 ```
 
 ## 4. Diagram 2 — One execution, step by step
@@ -56,22 +56,22 @@ flowchart LR
 ```mermaid
 sequenceDiagram
   participant C as Client
-  participant W as Webserver<br/>ExecutionController
+  participant W as Webserver
   participant Q as Queue
   participant E as Executor
   participant K as Worker
-  participant S as Storage/DB
-  C->>W: POST /executions or POST /webhook/{ns}/{id}/{key}
-  W->>S: load Flow, validate inputs (FlowInputOutput)
-  W->>Q: emit Create command (WebhookService.startExecution)
+  participant S as StorageDB
+  C->>W: POST executions or POST webhook key URL
+  W->>S: load Flow, validate inputs
+  W->>Q: emit Create command
   Q->>E: deliver command
   E->>S: persist Execution CREATED
-  E->>K: WorkerTask job (tenant + namespace + inputs + labels)
-  K->>K: RunContext.render Pebble, fetch secret(), download files
-  K->>K: run plugin / script / Docker / K8s
-  K->>E: WorkerTaskResult (outputs + files + status)
-  E->>E: next task / retry / subflow / SUCCESS-FAILED
-  E->>S: persist + index
+  E->>K: WorkerTask job
+  K->>K: render Pebble, fetch secrets, download files
+  K->>K: run plugin or script or Docker or K8s
+  K->>E: WorkerTaskResult
+  E->>E: next task or retry or subflow
+  E->>S: persist plus index
 ```
 
 Code trail: `ExecutionController.java:592 triggerExecutionByPostWebhook` → `WebhookService.java:133 newExecution` + `:213 startExecution` → `executor/DefaultExecutor.java` → `worker/processors/WorkerTaskProcessor.java` → `core/runners/DefaultRunContext.java`.
@@ -80,11 +80,11 @@ Code trail: `ExecutionController.java:592 triggerExecutionByPostWebhook` → `We
 
 ```mermaid
 flowchart TD
-  F[Flow YAML] --> S1[Schedule trigger<br/>cron, evaluated by scheduler]
-  F --> P1[Polling trigger<br/>Kafka / S3 / SQL / MQTT<br/>run by WorkerTriggerProcessor]
-  F --> R1[Realtime trigger<br/>long-lived worker subscription]
-  F --> W1[Webhook trigger<br/>AbstractWebhookTrigger<br/>GET/PUT/POST /webhook/... no login]
-  S1 --> Q[Execution Queue]
+  F["Flow YAML"] --> S1["Schedule trigger - cron"]
+  F --> P1["Polling trigger - Kafka - S3 - SQL"]
+  F --> R1["Realtime trigger - worker subscription"]
+  F --> W1["Webhook trigger - no login"]
+  S1 --> Q["Execution Queue"]
   P1 --> Q
   R1 --> Q
   W1 --> Q
